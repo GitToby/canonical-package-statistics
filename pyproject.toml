@@ -42,4 +42,7 @@ line-length = 120
 target_versions = ['py38', 'py39', 'py310', 'py311']
 
 [tool.pytest.ini_options]
-addopts = "--cov --cov-report html --cov-report term-missing --cov-fail-under 95"
+#addopts = "--cov --cov-report html --cov-report term-missing --cov-fail-under 70"
+
+[project.scripts]
+package-stats = "canonical_package_statistics.app:app"

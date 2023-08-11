@@ -7,9 +7,13 @@ from typing import Annotated, Iterable
 
 import requests
 import typer
+from rich import print
+from rich.progress import track
 
-DEFAULT_MIRROR = "http://ftp.uk.debian.org/debian/dists/stable/main/"
+DEFAULT_MIRROR = "http://ftp.uk.debian.org/debian/dists/stable/main"
 CACHE_DIR = Path().home() / ".cache" / "package-statistics"  # technically not correct on Windows machines
+
+app = typer.Typer()
 
 
 class Arch(Enum):
@@ -41,28 +45,35 @@ class Arch(Enum):
     udeb_s390 = "udeb-s390x"
 
 
+@app.command()
 def main(
-    arch: Annotated[Arch, typer.Option(help="Specific architecture to print statistics for")] = Arch.all.value,
-    use_cached: Annotated[bool, typer.Argument(help="Whether to bypass any cached results")] = True,
-    mirror: Annotated[str, typer.Argument(help="The Debian Repo Mirror to use")] = DEFAULT_MIRROR,
-    list_count: Annotated[int, typer.Argument(help="The number of packages to list with the most files")] = 10,
+    arch: Annotated[Arch, typer.Argument(help="Specific architecture to print statistics for")] = Arch.all.value,
+    cache: Annotated[bool, typer.Option(help="Whether to bypass any cached results")] = True,
+    cache_dir: Annotated[Path, typer.Option(help="Whether to bypass any cached results")] = CACHE_DIR,
+    mirror: Annotated[str, typer.Option(help="The Debian Repo Mirror to use")] = DEFAULT_MIRROR,
+    list_count: Annotated[int, typer.Option(help="The number of packages to list with the most files")] = 10,
 ):
     """
     Downloads the compressed Contents file associated with it from a Debian mirror & output the statistics of the top
     10 packages that have the most files associated with them.
     """
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
     contents_file = f"Contents-{arch.value}.gz"
-    cache_file = (CACHE_DIR / contents_file).resolve()
-    if use_cached and cache_file.exists():
+    cache_file = (cache_dir / contents_file).resolve()
+    if cache and cache_file.exists():
         # use cached file, no need to network requests
         print(f"Using cached file {cache_file}")
         data = read_gzip_file(cache_file)
     else:
         url = f"{mirror}/{contents_file}"
-        print(f"making request to mirror {url} to download Contents File")
+        print(f"Making request to mirror {url} to download Contents File")
         res = requests.get(url)
-        res.raise_for_status()
+
+        try:
+            res.raise_for_status()
+        except requests.HTTPError as e:
+            print(f"[bold red]Bad request to url:[/bold red] {e}")
+            raise typer.Exit(code=1)
 
         # store content as the cached file for next time.
         bin_data = res.content
@@ -72,12 +83,13 @@ def main(
         cache_file_like = BytesIO(bin_data)
         data = read_gzip_file(cache_file_like)
 
-    print(f"Data file contains {len(data)} rows")
     package_file_counts, err_lines = parse_file_rows(data)
 
     print(f"Done. Found {err_lines} error lines in file {contents_file}")
+    print()
+    print("Results are as follows:")
     for i, (package, file_count) in enumerate(package_file_counts.most_common(list_count)):
-        print(i + 1, package.decode(), file_count)
+        print(f"{i + 1}.", package.decode(), file_count)
 
 
 def persist_file(cache_file_path: Path, bin_data: bytes):
@@ -122,7 +134,7 @@ def parse_file_rows(file_rows: Iterable[bytes]):
     # This var will contain the name of the package for each time there is a file associated with it.
     package_files = []
     err_lines = 0
-    for row in file_rows:
+    for row in track(file_rows, "Counting..."):
         try:
             # we don't care about the names of the files, just the packages is associated with a file
             # the package names are the last string element in a whitespace sep list.
@@ -143,4 +155,4 @@ def parse_file_rows(file_rows: Iterable[bytes]):
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    app()
