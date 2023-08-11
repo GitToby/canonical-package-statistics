@@ -1,0 +1,45 @@
+[project]
+name = "canonical-package-statistics"
+version = "0.1.0"
+description = ""
+authors = [
+    { name = "Toby Devlin", email = "toby@tobydevlin.com" },
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+dependencies = [
+    "typer[all]>=0.9.0",
+    "requests>=2.31.0",
+]
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.7.0",
+    "ruff>=0.0.284",
+]
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+select = ["E", "F", "B"]
+fixable = ["E", "F", "B"]
+ignore = ["B008"]
+exclude = ["alembic/env.py"]
+
+line-length = 120
+
+[tool.ruff.mccabe]
+max-complexity = 10
+
+[tool.black]
+line-length = 120
+target_versions = ['py38', 'py39', 'py310', 'py311']
+
+[tool.pytest.ini_options]
+addopts = "--cov --cov-report html --cov-report term-missing --cov-fail-under 95"
